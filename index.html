@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MYRA - AI Friend</title>
+
+    <style>
+        body {
+            margin: 0;
+            background: linear-gradient(135deg, #0f172a, #2563eb);
+            font-family: Arial;
+            color: white;
+            min-height: 100vh;
+        }
+
+        .app {
+            max-width: 700px;
+            margin: auto;
+            padding: 30px 15px;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 60px;
+            margin: 10px;
+        }
+
+        .subtitle {
+            text-align: center;
+            font-size: 20px;
+            opacity: 0.8;
+        }
+
+        #chat {
+            background: white;
+            color: black;
+            min-height: 350px;
+            margin-top: 25px;
+            padding: 20px;
+            border-radius: 20px;
+            overflow-y: auto;
+        }
+
+        .message {
+            padding: 12px;
+            border-radius: 12px;
+            margin: 10px 0;
+        }
+
+        .you {
+            background: #dbeafe;
+        }
+
+        .myra {
+            background: #dcfce7;
+        }
+
+        .controls {
+            margin-top: 15px;
+            display: flex;
+            gap: 5px;
+        }
+
+        input {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 17px;
+        }
+
+        button {
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
+        .mic {
+            background: #ef4444;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="app">
+
+    <h1>MYRA</h1>
+
+    <div class="subtitle">
+        Your AI Friend
+    </div>
+
+    <div id="chat">
+        <div class="message myra">
+            <b>MYRA:</b> Hello! Main MYRA hoon. Mujhse baat karo.
+        </div>
+    </div>
+
+    <div class="controls">
+
+        <input
+            id="message"
+            type="text"
+            placeholder="MYRA se kuch bolo..."
+        >
+
+        <button onclick="sendMessage()">Send</button>
+
+        <button class="mic" onclick="startListening()">Mic</button>
+
+    </div>
+
+</div>
+
+<script>
+
+async function sendMessage() {
+
+    const input = document.getElementById("message");
+    const message = input.value.trim();
+
+    if (message === "") {
+        return;
+    }
+
+    addMessage("You", message, "you");
+
+    input.value = "";
+
+    try {
+
+        const response = await fetch("/chat", {
+
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify({
+                message: message
+            })
+
+        });
+
+        const data = await response.json();
+
+        if (data.reply) {
+            addMessage("MYRA", data.reply, "myra");
+            speak(data.reply);
+        } else {
+            addMessage(
+                "MYRA",
+                "Mujhe response nahi mila.",
+                "myra"
+            );
+        }
+
+    } catch (error) {
+
+        addMessage(
+            "MYRA",
+            "Server se connection nahi ho pa raha.",
+            "myra"
+        );
+
+        console.error(error);
+    }
+}
+
+
+function addMessage(name, message, className) {
+
+    const chat = document.getElementById("chat");
+
+    const div = document.createElement("div");
+
+    div.className = "message " + className;
+
+    div.innerHTML =
+        "<b>" + name + ":</b> " + message;
+
+    chat.appendChild(div);
+
+    chat.scrollTop = chat.scrollHeight;
+}
+
+
+function speak(text) {
+
+    if ("speechSynthesis" in window) {
+
+        const speech =
+            new SpeechSynthesisUtterance(text);
+
+        speech.lang = "hi-IN";
+
+        speech.rate = 1;
+
+        speech.pitch = 1;
+
+        speechSynthesis.speak(speech);
+    }
+}
+
+
+function startListening() {
+
+    const SpeechRecognition =
+        window.SpeechRecognition ||
+        window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+
+        alert(
+            "Is browser me voice recognition support nahi hai."
+        );
+
+        return;
+    }
+
+    const recognition =
+        new SpeechRecognition();
+
+    recognition.lang = "hi-IN";
+
+    recognition.start();
+
+    recognition.onresult = function(event) {
+
+        const text =
+            event.results[0][0].transcript;
+
+        document.getElementById("message").value = text;
+
+        sendMessage();
+    };
+}
+
+
+document
+    .getElementById("message")
+    .addEventListener("keydown", function(event) {
+
+        if (event.key === "Enter") {
+            sendMessage();
+        }
+
+    });
+
+</script>
+
+</body>
+</html>
