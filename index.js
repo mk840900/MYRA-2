@@ -23,7 +23,6 @@ Communication:
 - Do not repeat the same sentence.
 - Keep normal replies concise.
 - Answer the actual question.
-- If the user asks a simple question, give a simple answer.
 - Never invent memories.
 `;
 
@@ -68,7 +67,6 @@ function normalize(text) {
 }
 
 function detectLearning(text) {
-
     const t = normalize(text);
 
     if (t.includes("python") || t.includes("पाइथन")) {
@@ -126,7 +124,6 @@ function detectLearning(text) {
 }
 
 function isLearningQuestion(text) {
-
     const t = normalize(text);
 
     const patterns = [
@@ -134,10 +131,18 @@ function isLearningQuestion(text) {
         "main kya sikh",
         "mai kya seekh",
         "main kya seekh",
+        "mai aaj kya sikh",
+        "main aaj kya sikh",
+        "mai aaj kya seekh",
+        "main aaj kya seekh",
         "aaj mai kya sikh",
         "aaj main kya sikh",
         "aaj mai kya seekh",
         "aaj main kya seekh",
+        "kya sikh raha",
+        "kya sikh rha",
+        "kya seekh raha",
+        "kya seekh rha",
         "kya padh raha",
         "kya padh rha",
         "what am i learning",
@@ -148,16 +153,11 @@ function isLearningQuestion(text) {
 }
 
 function cleanReply(reply) {
-
     if (!reply) {
         return "Mujhe abhi jawab nahi mil paya.";
     }
 
     let text = reply.trim();
-
-    /*
-       Remove repeated identical sentences.
-    */
 
     const sentences = text
         .split(/(?<=[.!?।])\s+/)
@@ -167,7 +167,6 @@ function cleanReply(reply) {
     const unique = [];
 
     for (const sentence of sentences) {
-
         if (!unique.includes(sentence)) {
             unique.push(sentence);
         }
@@ -175,12 +174,8 @@ function cleanReply(reply) {
 
     text = unique.join(" ");
 
-    /*
-       Prevent extremely long local-model answers.
-    */
-
-    if (text.length > 500) {
-        text = text.substring(0, 500);
+    if (text.length > 700) {
+        text = text.substring(0, 700);
 
         const lastSpace = text.lastIndexOf(" ");
 
@@ -195,12 +190,7 @@ function cleanReply(reply) {
 }
 
 function directReply(message) {
-
     const t = normalize(message);
-
-    /*
-       Greetings
-    */
 
     if (
         t === "hi" ||
@@ -214,10 +204,6 @@ function directReply(message) {
         return "Hii Manoj! Kaise ho?";
     }
 
-    /*
-       How are you
-    */
-
     if (
         t.includes("kaisi ho") ||
         t.includes("kaise ho") ||
@@ -227,10 +213,6 @@ function directReply(message) {
         return "Main bilkul theek hoon Manoj. Tum kaise ho?";
     }
 
-    /*
-       What are you doing
-    */
-
     if (
         t.includes("kya kar rahi ho") ||
         t.includes("kya kr rahi ho") ||
@@ -239,10 +221,6 @@ function directReply(message) {
         return "Main tumse baat kar rahi hoon.";
     }
 
-    /*
-       Name
-    */
-
     if (
         t.includes("mera naam kya hai") ||
         t.includes("my name")
@@ -250,22 +228,13 @@ function directReply(message) {
         return `Tumhara naam ${memory.name} hai.`;
     }
 
-    /*
-       Current learning
-    */
-
     if (isLearningQuestion(message)) {
-
         if (memory.learning) {
             return `Tum ${memory.learning} seekh rahe ho.`;
         }
 
         return "Abhi mujhe yaad nahi hai ki tum kya seekh rahe the.";
     }
-
-    /*
-       Basic Python question
-    */
 
     if (
         t === "python kya hai" ||
@@ -274,15 +243,10 @@ function directReply(message) {
         return "Python ek programming language hai. Isse apps, websites, automation, AI aur bahut kuch banaya ja sakta hai.";
     }
 
-    /*
-       Simple arithmetic
-    */
-
     const mathMatch =
         t.match(/^(\d+)\s*\+\s*(\d+)$/);
 
     if (mathMatch) {
-
         const a = Number(mathMatch[1]);
         const b = Number(mathMatch[2]);
 
@@ -293,7 +257,6 @@ function directReply(message) {
 }
 
 app.post("/chat", async (req, res) => {
-
     const message = req.body.message;
 
     if (
@@ -312,22 +275,13 @@ app.post("/chat", async (req, res) => {
         saveMemory();
     }
 
-    /*
-       Try MYRA's direct understanding first.
-    */
-
     const direct = directReply(message);
 
     if (direct) {
-
         return res.json({
             reply: direct
         });
     }
-
-    /*
-       Otherwise use the local AI model.
-    */
 
     conversation.push({
         role: "user",
@@ -335,9 +289,7 @@ app.post("/chat", async (req, res) => {
     });
 
     if (conversation.length > 12) {
-
-        conversation =
-            conversation.slice(-12);
+        conversation = conversation.slice(-12);
     }
 
     const memoryContext = `
@@ -347,7 +299,6 @@ Current learning: ${memory.learning || "unknown"}
 `;
 
     const messages = [
-
         {
             role: "system",
             content:
@@ -355,27 +306,33 @@ Current learning: ${memory.learning || "unknown"}
                 "\n\n" +
                 memoryContext
         },
-
         ...conversation
-
     ];
 
     try {
+        if (!process.env.GROQ_API_KEY) {
+            return res.status(500).json({
+                error: "GROQ_API_KEY is not configured."
+            });
+        }
 
         const response = await fetch(
-            "http://127.0.0.1:8080/v1/chat/completions",
+            "https://api.groq.com/openai/v1/chat/completions",
             {
                 method: "POST",
 
                 headers: {
-                    "Content-Type":
-                        "application/json"
+                    "Content-Type": "application/json",
+                    "Authorization":
+                        `Bearer ${process.env.GROQ_API_KEY}`
                 },
 
                 body: JSON.stringify({
+                    model: "openai/gpt-oss-20b",
                     messages: messages,
-                    temperature: 0.2,
-                    max_tokens: 60
+                    temperature: 0.4,
+                    max_completion_tokens: 300,
+                    reasoning_effort: "low"
                 })
             }
         );
@@ -383,14 +340,13 @@ Current learning: ${memory.learning || "unknown"}
         const data = await response.json();
 
         if (!response.ok) {
-
             console.log(
-                "Local AI error:",
+                "Groq AI error:",
                 data
             );
 
             return res.status(500).json({
-                error: "Local AI error"
+                error: "Groq AI error"
             });
         }
 
@@ -409,7 +365,6 @@ Current learning: ${memory.learning || "unknown"}
         });
 
     } catch (error) {
-
         console.log(
             "Connection error:",
             error.message
@@ -417,13 +372,12 @@ Current learning: ${memory.learning || "unknown"}
 
         res.status(500).json({
             error:
-                "MYRA local AI server se connect nahi ho pa rahi."
+                "MYRA AI se connect nahi ho pa rahi."
         });
     }
 });
 
 app.get("/status", (req, res) => {
-
     res.json({
         status: "ok",
         memory: memory
@@ -431,12 +385,6 @@ app.get("/status", (req, res) => {
 });
 
 app.listen(3000, () => {
-
-    console.log(
-        "MYRA Brain v2 started"
-    );
-
-    console.log(
-        "http://127.0.0.1:3000"
-    );
+    console.log("MYRA Brain v3 started");
+    console.log("http://127.0.0.1:3000");
 });
